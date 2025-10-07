@@ -7,12 +7,6 @@ import { Header } from "@/components/layout/Header";
 import { RegistrationStepper } from "@/components/registration/RegistrationStepper";
 import { ProtectedRoute } from "@/components/registration/ProtectedRoute";
 import { ApplicationStatusGuard } from "@/components/registration/ApplicationStatusGuard";
-import { PersonalInfoForm } from "@/pages/PersonalInfoForm";
-import { OtherDetailsForm } from "@/pages/OtherDetailsForm";
-import { ExperienceInfoForm } from "@/pages/ExperienceInfoForm";
-import { UploadDocumentsForm } from "@/pages/UploadDocumentsForm";
-import { PaymentInfoForm } from "@/pages/PaymentInfoForm";
-import { FinalReviewForm } from "@/pages/FinalReviewForm";
 import { useRegistrationData } from "@/hooks/useRegistrationData";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -92,6 +86,8 @@ const REGISTRATION_STEPS = [
 
 export function ExamRegistration() {
   const [currentStep, setCurrentStep] = useState(1);
+
+  // Removed stepper-next event listener. Navigation is handled by setCurrentStep and handleNext.
   const [posts, setPosts] = useState([]);
   const [postsLoading, setPostsLoading] = useState(true);
   const navigate = useNavigate();
@@ -269,7 +265,7 @@ export function ExamRegistration() {
       case 3:
         return <Education onNext={handleNext} />;
       case 4:
-        return <Experience />;
+        return <Experience onNext={handleNext} />;
       case 5:
         return <DocumentsUpload />;
       case 6: {
@@ -403,7 +399,7 @@ export function ExamRegistration() {
                   {currentStep === 6 ? (
                     <Button
                       onClick={handleNext}
-                      disabled={saving || !(data.paymentDetails?.payment_status === 'completed')}
+                      disabled={!(data.paymentDetails?.payment_status === 'completed')}
                       className="flex items-center gap-2"
                     >
                       Next
@@ -411,7 +407,27 @@ export function ExamRegistration() {
                     </Button>
                   ) : currentStep === 7 ? (
                     <Button
-                      onClick={handleNext}
+                      onClick={async () => {
+                        // Submit application logic (was in FinalPreview)
+                        try {
+                          const nextAppNumber = `REG${new Date().getFullYear()}${String(Date.now()).slice(-7)}`;
+                          const { error } = await supabase
+                            .from('applications')
+                            .update({
+                              status: 'submitted',
+                              submitted_at: new Date().toISOString(),
+                              application_number: nextAppNumber
+                            })
+                            .eq('id', (data.applicationInfo as any)?.id)
+                            .select()
+                            .single();
+                          if (error) throw error;
+                          toast({ title: 'Success', description: 'Application submitted successfully!' });
+                          navigate('/Dashboard');
+                        } catch (err) {
+                          toast({ title: 'Error', description: 'Failed to submit application', variant: 'destructive' });
+                        }
+                      }}
                       disabled={saving}
                       className="flex items-center gap-2"
                     >

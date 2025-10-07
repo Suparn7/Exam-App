@@ -81,6 +81,27 @@ export function Payment() {
     fetchPaymentDetails();
   }, [user, loading, navigate]);
 
+  // Map user-facing category to payment table category
+  const mapCategoryForPayment = (cat: string) => {
+    if (!cat) return "";
+    const lower = cat.trim().toLowerCase();
+    switch (lower) {
+      case "ur":
+      case "general":
+        return "general";
+      case "obc":
+        return "obc";
+      case "sc":
+        return "sc";
+      case "st":
+        return "st";
+      case "wes":
+        return "wes";
+      default:
+        return lower;
+    }
+  };
+
   // Fetch user's category and payment amount
   const fetchCategoryAndAmount = async () => {
     if (!user) return;
@@ -90,19 +111,37 @@ export function Payment() {
       .select("category")
       .eq("user_id", user.id)
       .single();
+    console.log("[Payment] personalInfo:", personalInfo, "infoError:", infoError);
     if (infoError || !personalInfo) {
       setCategory("");
       setAmount(0);
       return;
     }
     setCategory(personalInfo.category);
+    // Map to payment table category
+    const paymentCategory = mapCategoryForPayment(personalInfo.category);
+    console.log("[Payment] mapped category for payment table:", paymentCategory);
     // Get amount from category_payments
     //@ts-ignore
-    const { data: catPay, error: catError } = await supabase
+    const { data: catPay, error: catError, status, statusText } = await supabase
       .from("category_payments")
       .select("amount")
-      .eq("category", personalInfo.category)
+      .eq("category", paymentCategory)
       .single();
+    console.log("[Payment] category_payments query:", {
+      paymentCategory,
+      catPay,
+      catError,
+      status,
+      statusText
+    });
+    if (!catPay || catError) {
+      // Fallback: log all categories in category_payments
+      const { data: allCategories, error: allCatError } = await supabase
+        .from("category_payments")
+        .select("category, amount");
+      console.log("[Payment] Fallback: all categories in category_payments:", allCategories, "error:", allCatError);
+    }
     setAmount(catPay?.amount ?? 0);
   };
 
@@ -115,15 +154,23 @@ export function Payment() {
       .select("id")
       .eq("user_id", user.id)
       .single();
+    console.log("[Payment] fetchPaymentDetails: fetched application", app, "error:", appError);
     if (!app) return;
     // Get payment for application
-    const { data: payment, error: payError } = await supabase
+    const { data: payment, error: payError, status, statusText } = await supabase
       .from("payments")
       .select("*")
       .eq("application_id", app.id)
       .order("created_at", { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
+    console.log("[Payment] fetchPaymentDetails: payment query", {
+      application_id: app.id,
+      payment,
+      payError,
+      status,
+      statusText
+    });
     if (payment) {
       setPaymentDetails(payment);
       setPaymentStatus(payment.payment_status);

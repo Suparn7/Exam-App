@@ -35,7 +35,8 @@ export function OtherDetails() {
         .from("other_details")
         .select("*")
         .eq("user_id", user.id)
-        .single();
+        .maybeSingle();
+      console.log("OtherDetails fetch result:", { data, error });
       if (error) throw error;
       if (data) setOtherDetails(data);
     } catch (error) {

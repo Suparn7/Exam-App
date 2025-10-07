@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+// import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { motion } from "framer-motion";
 import { useForm } from "react-hook-form";
@@ -43,10 +43,12 @@ interface Experience extends ExperienceForm {
   id?: string;
 }
 
-export function Experience() {
+export function Experience({ onNext }: { onNext?: () => void }) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const navigate = useNavigate();
+  // const navigate = useNavigate();
+
+  // onNext is now a proper prop
   const { user, loading } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [experiences, setExperiences] = useState<Experience[]>([]);
@@ -61,12 +63,10 @@ export function Experience() {
   useEffect(() => {
     if (loading) return;
     if (!user) {
-      navigate("/auth");
       return;
     }
-    
     fetchExperienceData();
-  }, [user, loading, navigate]);
+  }, [user, loading]);
 
   const fetchExperienceData = async () => {
     if (!user) return;
@@ -185,11 +185,11 @@ export function Experience() {
   };
 
   const handleContinue = () => {
-    navigate("/documents");
+  onNext();
   };
 
   const handleSkip = () => {
-    navigate("/documents");
+  onNext();
   };
 
   if (loading) {

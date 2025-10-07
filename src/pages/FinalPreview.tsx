@@ -278,41 +278,6 @@ export const FinalPreview: React.FC = () => {
                     </div>
                   )}
                 </div>
-                {/* Submit Button */}
-                <div className="flex justify-end mt-8">
-                  <Button
-                    variant="default"
-                    size="lg"
-                    className="bg-primary text-white font-bold px-6 py-3 rounded shadow-lg"
-                    onClick={async () => {
-                      setLoadingData(true);
-                      try {
-                        const nextAppNumber = `REG${new Date().getFullYear()}${String(Date.now()).slice(-7)}`;
-                        const { error } = await supabase
-                          .from('applications')
-                          .update({
-                            status: 'submitted',
-                            submitted_at: new Date().toISOString(),
-                            application_number: nextAppNumber
-                          })
-                          .eq('id', application.id)
-                          .select()
-                          .single();
-                        if (error) throw error;
-                        setFinalAppNumber(nextAppNumber);
-                        setSubmitted(true);
-                        toast({ title: 'Success', description: 'Application submitted successfully!' });
-                      } catch (err) {
-                        toast({ title: 'Error', description: 'Failed to submit application', variant: 'destructive' });
-                      } finally {
-                        setLoadingData(false);
-                      }
-                    }}
-                    disabled={loadingData || submitted}
-                  >
-                    {submitted ? "Submitted" : "Submit Application"}
-                  </Button>
-                </div>
               </CardContent>
             </Card>
           </div>

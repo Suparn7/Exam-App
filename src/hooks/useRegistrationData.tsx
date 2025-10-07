@@ -319,6 +319,8 @@ export function useRegistrationData() {
           roll_number: edu.roll_number || null
         }));
 
+        console.log("Education to insert:", educationWithUserId);
+
         const { error } = await supabase
           .from('educational_qualifications')
           .insert(educationWithUserId);
