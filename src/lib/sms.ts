@@ -40,7 +40,11 @@ export class SMSService {
     try {
       const formattedMobile = this.formatMobile(mobile);
       // Send SMS via Supabase Edge Function
-      const response = await fetch('https://hiodppambsqewyladrfs.supabase.co/functions/v1/send-sms', {
+      const smsFunctionUrl = import.meta.env.VITE_SUPABASE_SMS_FUNCTION_URL;
+      if (!smsFunctionUrl) {
+        throw new Error('Supabase SMS function URL is not set in environment variables.');
+      }
+      const response = await fetch(smsFunctionUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

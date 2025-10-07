@@ -238,30 +238,29 @@ export function useRegistrationData() {
   }, [user?.id, toast]);
 
   const savePersonalInfo = useCallback(async (personalInfo: Partial<PersonalInfoData>) => {
+  console.log('savePersonalInfo full personalInfo:', personalInfo);
     if (!user?.id) return false;
     
     setSaving(true);
     try {
+      const pi: any = personalInfo;
       const dataToSave = {
         user_id: user.id,
-        address: personalInfo.permanentAddress ?? '',
-        state: personalInfo.permanentState ?? 'Jharkhand',
-        district: personalInfo.permanentDistrict ?? '',
-        pincode: personalInfo.permanentPin ?? '',
-        correspondence_address: personalInfo.correspondenceAddress ?? '',
-        correspondence_state: personalInfo.correspondenceState ?? '',
-        correspondence_district: personalInfo.correspondenceDistrict ?? '',
-        correspondence_pincode: personalInfo.correspondencePin ?? '',
-        date_of_birth: personalInfo.dateOfBirth ?? '',
-        father_name: personalInfo.fatherName ?? '',
-        mother_name: personalInfo.motherName ?? '',
-        first_name: personalInfo.firstName ?? '',
-        last_name: personalInfo.lastName ?? '',
-  gender: (personalInfo.gender ?? 'male').toLowerCase() as 'male' | 'female' | 'other',
-  category: "general" as const,
-  alternative_mobile: personalInfo.mobile ?? '',
-        aadhar_number: personalInfo.aadhar_number ?? '',
-        post_id: personalInfo.post_id ?? null
+        post_id: pi.postId ?? pi.post_id ?? null,
+        first_name: pi.firstName ?? pi.first_name ?? '',
+        middle_name: pi.middleName ?? pi.middle_name ?? '',
+        last_name: pi.lastName ?? pi.last_name ?? '',
+        father_name: pi.fatherName ?? pi.father_name ?? '',
+        mother_name: pi.motherName ?? pi.mother_name ?? '',
+        date_of_birth: pi.dateOfBirth ?? pi.date_of_birth ?? null,
+        gender: (pi.gender ?? 'male').toLowerCase(),
+        category: pi.category ?? 'general',
+        aadhar_number: pi.aadhar_number ?? '',
+        address: pi.address ?? '',
+        state: pi.state ?? 'Jharkhand',
+        district: pi.district ?? '',
+        pincode: pi.pincode ?? '',
+        alternative_mobile: pi.alternativeMobile ?? pi.alternative_mobile ?? '',
       };
 
       const { error } = await supabase
@@ -269,6 +268,33 @@ export function useRegistrationData() {
         .upsert(dataToSave);
 
       if (error) throw error;
+
+      // Ensure application row exists for this user and post
+      if (dataToSave.user_id && dataToSave.post_id) {
+        const { data: existingApp, error: appFetchError } = await supabase
+          .from('applications')
+          .select('id')
+          .eq('user_id', dataToSave.user_id)
+          .eq('post_id', dataToSave.post_id)
+          .single();
+
+        if (!existingApp) {
+          // Generate application_number using Supabase RPC
+          const { data: appNumber, error: appNumError } = await supabase.rpc('generate_registration_number');
+          if (appNumError || !appNumber) throw appNumError || new Error('Failed to generate application number');
+
+          // Insert new application row with all required fields
+          const { error: appInsertError } = await supabase
+            .from('applications')
+            .insert({
+              user_id: dataToSave.user_id,
+              post_id: dataToSave.post_id,
+              application_number: appNumber,
+              status: 'draft',
+            });
+          if (appInsertError) throw appInsertError;
+        }
+      }
 
       setData(prev => ({
         ...prev,

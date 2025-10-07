@@ -47,7 +47,12 @@ const personalInfoSchema = z.object({
 
 type PersonalInfoForm = z.infer<typeof personalInfoSchema>;
 
-export function PersonalInfo() {
+interface PersonalInfoProps {
+  onNext?: () => void;
+  onSave?: (data: PersonalInfoForm) => Promise<boolean>;
+}
+
+export function PersonalInfo({ onNext, onSave }: PersonalInfoProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -128,71 +133,21 @@ export function PersonalInfo() {
     if (!user) return;
     setIsLoading(true);
     try {
-      const personalInfoData = {
-        user_id: user.id,
-        post_id: data.postId,
-        first_name: data.firstName,
-        middle_name: data.middleName || null,
-        last_name: data.lastName,
-        father_name: data.fatherName,
-        mother_name: data.motherName,
-        date_of_birth: data.dateOfBirth,
-        gender: data.gender,
-        category: data.category,
-        aadhar_number: data.aadhar_number,
-        address: data.address,
-        state: data.state,
-        district: data.district,
-        pincode: data.pincode,
-        alternative_mobile: data.alternativeMobile || null,
-        registration_number: existingData?.registration_number || null
-      };
-      // Save personal info
-      if (existingData) {
-        const { error } = await supabase
-          .from('personal_info')
-          .update(personalInfoData)
-          .eq('user_id', user.id);
-        if (error) throw error;
-      } else {
-        const { data: regNumber } = await supabase.rpc('generate_registration_number');
-        const { error } = await supabase
-          .from('personal_info')
-          .insert({ ...personalInfoData, registration_number: regNumber });
-        if (error) throw error;
+      // Prevent empty date from being sent to DB
+      if (!data.dateOfBirth) {
+        toast({
+          title: "Validation Error",
+          description: "Date of Birth is required.",
+          variant: "destructive"
+        });
+        setIsLoading(false);
+        return;
       }
-
-      // Ensure application row exists for this user and post
-      const { data: existingApp, error: appFetchError } = await supabase
-        .from('applications')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('post_id', data.postId)
-        .single();
-
-      if (!existingApp) {
-        // Generate application_number using Supabase RPC
-        const { data: appNumber, error: appNumError } = await supabase.rpc('generate_registration_number');
-        if (appNumError || !appNumber) throw appNumError || new Error('Failed to generate application number');
-
-        // Insert new application row with all required fields
-        const { error: appInsertError } = await supabase
-          .from('applications')
-          .insert({
-            user_id: user.id,
-            post_id: data.postId,
-            application_number: appNumber,
-            status: 'draft',
-          });
-        if (appInsertError) throw appInsertError;
+      let saveResult = true;
+      if (onSave) {
+        saveResult = await onSave(data);
       }
-      // Optionally, update application row if you want to track more info
-
-      toast({
-        title: "Success",
-        description: "Personal information saved successfully",
-      });
-      // TODO: Use parent callback or context to advance step, not window event
+      if (saveResult && onNext) onNext();
     } catch (error: any) {
       toast({
         title: "Error",

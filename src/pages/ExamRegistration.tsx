@@ -212,11 +212,8 @@ export function ExamRegistration() {
     try {
       switch (currentStep) {
         case 1: {
-          const personalSaved = await savePersonalInfo(data.personalInfo);
-          if (personalSaved && data.personalInfo.post_id) {
-            await ensureApplication((data.personalInfo as any).postId);
-          }
-          return personalSaved;
+          // Saving is handled by PersonalInfo form's onSave callback. Do nothing here.
+          return true;
         }
         case 2: {
           // Save Other Details to new table
@@ -259,7 +256,12 @@ export function ExamRegistration() {
   const renderStepContent = () => {
     switch (currentStep) {
       case 1:
-        return <PersonalInfo />;
+        return <PersonalInfo onNext={handleNext} onSave={async (formData) => {
+          // Update registration context with latest form data
+          updateLocalData('personalInfo', formData);
+          // Save to DB
+          return await savePersonalInfo(formData);
+        }} />;
       case 2:
         return <OtherDetails />;
       case 3:
