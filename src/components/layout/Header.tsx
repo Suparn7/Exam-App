@@ -18,10 +18,10 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-white/20 glass-nav">
       {/* Top Info Bar */}
-      <div className="bg-gradient-primary text-white py-2">
+      <div className="bg-gradient-primary text-white py-1.5">
         <div className="container mx-auto px-4">
-          <div className="flex flex-col sm:flex-row justify-between items-center text-sm">
-            <div className="flex items-center gap-4 mb-2 sm:mb-0">
+          <div className="flex flex-col sm:flex-row justify-between items-center text-xs">
+            <div className="flex items-center gap-3 mb-1 sm:mb-0">
               <div className="flex items-center gap-1">
                 <Phone className="h-3 w-3" />
                 <span>7250310625</span>
@@ -40,16 +40,16 @@ export function Header() {
       </div>
 
       {/* Main Header */}
-      <div className="container mx-auto px-4 py-4">
+      <div className="container mx-auto px-4 py-2">
         <div className="flex flex-col lg:flex-row items-center justify-between gap-4">
           {/* Logo & Title */}
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 bg-gradient-secondary rounded-full flex items-center justify-center">
-              <span className="text-white font-bold text-xl">JH</span>
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-gradient-secondary rounded-full flex items-center justify-center">
+              <span className="text-white font-bold text-lg">JH</span>
             </div>
             <div>
-              <Badge className="gov-badge mb-2">{t('home.subtitle')}</Badge>
-              <h1 className="font-heading text-lg lg:text-xl font-bold text-primary">
+              <Badge className="gov-badge mb-1 text-xs">{t('home.subtitle')}</Badge>
+              <h1 className="font-heading text-base lg:text-lg font-bold text-primary">
                 {t('home.title')}
               </h1>
             </div>
