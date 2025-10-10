@@ -125,22 +125,18 @@ export function AdminDashboard() {
   if (loading || loadingStats) {
     return (
       <div className="min-h-screen bg-background">
-        <Header />
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
             <p className="text-muted-foreground">Loading admin dashboard...</p>
           </div>
         </div>
-        <Footer />
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
-      
       <div className="py-8">
         <div className="container mx-auto px-4">
           <motion.div 
@@ -352,8 +348,6 @@ export function AdminDashboard() {
           </Tabs>
         </div>
       </div>
-
-      <Footer />
     </div>
   );
 }

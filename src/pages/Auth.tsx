@@ -154,10 +154,8 @@ export function Auth() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      
-      <div className="py-20">
+    <div className="min-h-screen bg-gradient-to-br from-primary via-blue-700 to-secondary/90 flex flex-col">
+      <div className="flex-1 flex flex-col justify-center py-16">
         <div className="container mx-auto px-4 max-w-md">
           <motion.div 
             initial={{ opacity: 0, y: 30 }}
@@ -165,15 +163,18 @@ export function Auth() {
             transition={{ duration: 0.6 }}
             className="text-center mb-8"
           >
-            <Badge className="gov-badge mb-4">
-              {t('home.subtitle')}
+            <Badge className="gov-badge mb-3 bg-white/10 text-white shadow-sm border border-white/20">
+              Exam Portal Authentication
             </Badge>
-            <h1 className="text-4xl font-heading font-bold text-gradient-primary mb-4">
-              Login / Register
+            <h1 className="text-3xl md:text-4xl font-heading font-bold text-white drop-shadow mb-2 bg-gradient-to-r from-primary via-blue-700 to-secondary bg-clip-text text-transparent">
+              Secure access to your examination portal
             </h1>
+            <p className="text-white/80 text-sm md:text-base max-w-md mx-auto mb-2">
+              Sign up or log in to continue. Your credentials are protected and your data is secure.
+            </p>
           </motion.div>
 
-          <Card className="glass-card">
+          <Card className="glass-card shadow-2xl border border-white/20 backdrop-blur-md bg-white/10">
             <CardContent className="p-6">
               <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <TabsList className="grid w-full grid-cols-2 mb-6">
@@ -305,8 +306,6 @@ export function Auth() {
           </Card>
         </div>
       </div>
-
-      <Footer />
     </div>
   );
 }

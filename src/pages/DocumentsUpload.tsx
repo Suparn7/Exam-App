@@ -1,25 +1,35 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Header } from "@/components/layout/Header";
-import { Footer } from "@/components/layout/Footer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Camera, Plus, Trash2, ArrowRight, ArrowLeft, Save, ImageIcon } from "lucide-react";
+import { 
+  Camera, 
+  Plus, 
+  Trash2, 
+  Save, 
+  ImageIcon, 
+  Edit, 
+  Loader2,
+  Upload,
+  FileImage,
+  CheckCircle,
+  Eye
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 
 const documentSchema = z.object({
-  documentType: z.enum(["photo", "signature"]),
+  documentType: z.enum(["photo", "signature"], { required_error: "Document type is required" }),
   file: z.any().refine((file) => file instanceof File && file.size > 0, "File is required"),
 });
 
@@ -33,7 +43,11 @@ interface Document {
   status?: string;
 }
 
-export function DocumentsUpload() {
+interface DocumentsUploadProps {
+  onNext?: () => void;
+}
+
+export function DocumentsUpload({ onNext }: DocumentsUploadProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -41,6 +55,7 @@ export function DocumentsUpload() {
   const [isLoading, setIsLoading] = useState(false);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const form = useForm<DocumentForm>({
     resolver: zodResolver(documentSchema),
@@ -56,16 +71,33 @@ export function DocumentsUpload() {
   }, [user, loading, navigate]);
 
   const fetchDocuments = async () => {
-    if (!user) return;
+    if (!user) {
+      console.log('No user found');
+      return;
+    }
+
+    console.log('Fetching documents for user:', user.id);
+
     try {
       const { data, error } = await supabase
         .from("documents")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
-      if (error) throw error;
+
+      console.log('Documents fetch result:', { data, error });
+
+      if (error) {
+        console.error('Supabase fetch error:', error);
+        toast({
+          title: 'Error',
+          description: error.message || 'Failed to fetch documents',
+          variant: 'destructive',
+        });
+        return;
+      }
+
       if (data) {
-        // Map DB fields to UI fields
         const formatted = data.map((doc: any) => ({
           id: doc.id,
           documentType: doc.document_type,
@@ -74,8 +106,12 @@ export function DocumentsUpload() {
           status: doc.status,
         }));
         setDocuments(formatted);
+        console.log('Fetched documents:', formatted);
+      } else {
+        console.log('No documents found');
       }
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Error fetching documents:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to fetch documents",
@@ -89,23 +125,40 @@ export function DocumentsUpload() {
       console.log('No user found in handleUploadDocument');
       return;
     }
-    console.log('Uploading document for user:', user.id, user);
+
+    console.log('Starting document upload for user:', user.id);
+    console.log('Form data:', data);
+
     setIsLoading(true);
+
     try {
-      // Upload file to Supabase Storage
       const file = data.file as File;
       const fileExt = file.name.split('.').pop();
       const fileName = `${user.id}_${data.documentType}_${Date.now()}.${fileExt}`;
       const storagePath = `${data.documentType}s/${fileName}`;
+
+      console.log('Uploading to storage:', storagePath);
+
+      // Upload file to Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from("documents")
         .upload(storagePath, file, { upsert: true });
-      if (uploadError) throw uploadError;
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        throw uploadError;
+      }
+
+      console.log('File uploaded successfully');
+
       // Get public URL
       const { data: urlData } = supabase.storage
         .from("documents")
         .getPublicUrl(storagePath);
+
       const file_url = urlData?.publicUrl || "";
+      console.log('Public URL:', file_url);
+
       // Save metadata in DB
       const docData = {
         user_id: user.id,
@@ -117,29 +170,51 @@ export function DocumentsUpload() {
         mime_type: file.type,
         status: "uploaded" as const,
       };
+
+      console.log('Saving document metadata:', docData);
+
       if (editingIndex !== null) {
-        // Update existing document
         const docToUpdate = documents[editingIndex];
+        console.log('Updating document with ID:', docToUpdate.id);
+
         const { error } = await supabase
           .from("documents")
           .update(docData)
           .eq("id", docToUpdate.id);
-        if (error) throw error;
+
+        if (error) {
+          console.error('Update error:', error);
+          throw error;
+        }
+
+        console.log('Document updated successfully');
         setEditingIndex(null);
       } else {
-        // Add new document
+        console.log('Inserting new document...');
+
         const { error } = await supabase
           .from("documents")
           .insert(docData);
-        if (error) throw error;
+
+        if (error) {
+          console.error('Insert error:', error);
+          throw error;
+        }
+
+        console.log('Document inserted successfully');
       }
+
       form.reset();
-      fetchDocuments();
+      setPreviewUrl(null);
+      await fetchDocuments();
+
       toast({
         title: "Success",
         description: editingIndex !== null ? "Document updated successfully" : "Document uploaded successfully",
       });
-    } catch (error) {
+
+    } catch (error: any) {
+      console.error('Error uploading document:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to upload document",
@@ -154,22 +229,35 @@ export function DocumentsUpload() {
     const doc = documents[index];
     form.reset({ documentType: doc.documentType });
     setEditingIndex(index);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleDeleteDocument = async (index: number) => {
     const doc = documents[index];
+
+    console.log('Deleting document with ID:', doc.id);
+
     try {
       const { error } = await supabase
         .from("documents")
         .delete()
         .eq("id", doc.id);
-      if (error) throw error;
-      fetchDocuments();
+
+      if (error) {
+        console.error('Delete error:', error);
+        throw error;
+      }
+
+      console.log('Document deleted successfully');
+      await fetchDocuments();
+
       toast({
         title: "Success",
         description: "Document deleted successfully",
       });
-    } catch (error) {
+
+    } catch (error: any) {
+      console.error('Error deleting document:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to delete document",
@@ -178,169 +266,313 @@ export function DocumentsUpload() {
     }
   };
 
-  const handleContinue = () => {
-    navigate("/payment");
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      form.setValue("file", file, { shouldValidate: true });
+      // Create preview URL
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+    }
+  };
+
+  const container = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+        delayChildren: 0.2
+      }
+    }
+  };
+
+  const item = {
+    hidden: { opacity: 0, y: 20 },
+    show: { opacity: 1, y: 0 }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Loading...</p>
-          </div>
-        </div>
-        <Footer />
+      <div className="flex items-center justify-center py-20">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center"
+        >
+          <motion.div
+            className="w-20 h-20 border-4 border-teal-500 border-t-transparent rounded-full mx-auto mb-6"
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          />
+          <p className="text-gray-700 text-lg font-semibold" style={{ lineHeight: "1.8" }}>
+            Loading...
+          </p>
+        </motion.div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="py-8">
-        <div className="container mx-auto px-4 max-w-4xl">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-8"
-          >
-            <Badge className="gov-badge mb-4">Document Upload</Badge>
-            <h1 className="text-4xl font-heading font-bold text-gradient-primary mb-4">
-              Upload Photo & Signature
-            </h1>
-            <p className="text-muted-foreground">
-              Please upload a clear photo and your signature as images.
-            </p>
-          </motion.div>
+    <div className="space-y-8">
+      <motion.div
+        variants={container}
+        initial="hidden"
+        animate="show"
+        className="grid grid-cols-1 lg:grid-cols-2 gap-8"
+      >
+        {/* Upload Document Form */}
+        <motion.div variants={item}>
+          <Card className="bg-gradient-to-br from-green-50 to-teal-50 border-2 border-green-200 shadow-lg hover:shadow-xl transition-all rounded-2xl h-full">
+            <CardHeader className="bg-gradient-to-r from-green-500 to-teal-500 text-white rounded-t-2xl">
+              <CardTitle className="text-xl font-bold flex items-center gap-3" style={{ lineHeight: "1.8" }}>
+                {editingIndex !== null ? (
+                  <>
+                    <Edit className="h-6 w-6" />
+                    Edit Document
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-6 w-6" />
+                    Upload Document
+                  </>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6">
+              <form onSubmit={form.handleSubmit(handleUploadDocument)} className="space-y-6">
+                <div className="space-y-3">
+                  <Label className="text-base font-semibold text-gray-800 flex items-center gap-2" style={{ lineHeight: "1.8" }}>
+                    <FileImage className="h-4 w-4" />
+                    Document Type *
+                  </Label>
+                  <Select
+                    value={form.watch("documentType")}
+                    onValueChange={(value) => form.setValue("documentType", value as "photo" | "signature")}
+                    disabled={isLoading}
+                  >
+                    <SelectTrigger className="h-12 bg-white border-2 border-green-200 focus:border-teal-400 rounded-xl">
+                      <SelectValue placeholder="Select document type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="photo">
+                        <div className="flex items-center gap-2">
+                          <Camera className="h-4 w-4" />
+                          Passport Photo
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="signature">
+                        <div className="flex items-center gap-2">
+                          <Edit className="h-4 w-4" />
+                          Signature
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {form.formState.errors.documentType && (
+                    <p className="text-sm text-red-600">{form.formState.errors.documentType.message}</p>
+                  )}
+                </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Upload Document Form */}
-            <Card className="glass-card">
-              <CardHeader>
-                <CardTitle className="text-xl font-heading text-gradient-primary flex items-center gap-3">
-                  <Plus className="h-5 w-5" />
-                  {editingIndex !== null ? "Edit Document" : "Upload Document"}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={form.handleSubmit(handleUploadDocument)} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Document Type *</Label>
-                    <select
-                      className="form-glass w-full"
-                      {...form.register("documentType")}
-                      disabled={isLoading}
-                    >
-                      <option value="">Select type</option>
-                      <option value="photo">Photo</option>
-                      <option value="signature">Signature</option>
-                    </select>
-                    {form.formState.errors.documentType && (
-                      <p className="text-sm text-destructive">{form.formState.errors.documentType.message}</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="file">Image *</Label>
+                <div className="space-y-3">
+                  <Label htmlFor="file" className="text-base font-semibold text-gray-800 flex items-center gap-2" style={{ lineHeight: "1.8" }}>
+                    <ImageIcon className="h-4 w-4" />
+                    Upload Image *
+                  </Label>
+                  <div className="relative">
                     <Input
                       id="file"
                       type="file"
                       accept="image/*"
-                      className="form-glass"
+                      className="h-12 bg-white border-2 border-gray-200 focus:border-teal-400 focus:ring-2 focus:ring-teal-400/50 rounded-xl"
                       disabled={isLoading}
-                      onChange={e => {
-                        const file = e.target.files?.[0];
-                        form.setValue("file", file, { shouldValidate: true });
-                      }}
+                      onChange={handleFileChange}
                     />
-                    {form.formState.errors.file && (
-                      <p className="text-sm text-destructive">{String(form.formState.errors.file.message)}</p>
-                    )}
                   </div>
-                  <div className="flex gap-4">
-                    {editingIndex !== null && (
-                      <Button
-                        type="button"
-                        onClick={() => {
-                          setEditingIndex(null);
-                          form.reset();
-                        }}
-                        variant="ghost"
-                      >
-                        Cancel
-                      </Button>
-                    )}
-                    <Button
-                      type="submit"
-                      disabled={isLoading}
-                      variant="default"
-                      className="flex-1"
-                    >
-                      {isLoading ? "Saving..." : editingIndex !== null ? "Update" : "Upload"}
-                      <Save className="ml-2 h-4 w-4" />
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
+                  {form.formState.errors.file && (
+                    <p className="text-sm text-red-600">{String(form.formState.errors.file.message)}</p>
+                  )}
 
-            {/* Document List */}
-            <Card className="glass-card">
-              <CardHeader>
-                <CardTitle className="text-xl font-heading text-gradient-primary flex items-center gap-3">
-                  <ImageIcon className="h-5 w-5" />
-                  Your Documents
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
+                  {/* Image Preview */}
+                  {previewUrl && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="mt-4 p-4 bg-white rounded-xl border-2 border-green-200"
+                    >
+                      <Label className="text-sm font-semibold text-gray-700 mb-2 block" style={{ lineHeight: "1.8" }}>
+                        Preview:
+                      </Label>
+                      <img 
+                        src={previewUrl} 
+                        alt="Preview" 
+                        className="w-full h-48 object-contain rounded-lg border border-gray-200"
+                      />
+                    </motion.div>
+                  )}
+                </div>
+
+                <div className="bg-teal-50 p-4 rounded-xl border border-teal-200">
+                  <p className="text-sm text-gray-700" style={{ lineHeight: "1.8" }}>
+                    <strong>Note:</strong> Please ensure the image is clear and follows the specified format requirements.
+                  </p>
+                </div>
+
+                <div className="flex gap-4 pt-4">
+                  {editingIndex !== null && (
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        setEditingIndex(null);
+                        setPreviewUrl(null);
+                        form.reset();
+                      }}
+                      variant="outline"
+                      size="lg"
+                      className="border-2 border-gray-300 hover:bg-gray-50 rounded-xl px-6 py-6 font-semibold"
+                    >
+                      Cancel
+                    </Button>
+                  )}
+                  <Button
+                    type="submit"
+                    disabled={isLoading}
+                    size="lg"
+                    className="flex-1 bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white rounded-xl px-6 py-6 font-semibold shadow-lg"
+                  >
+                    {isLoading ? (
+                      <>
+                        <motion.div
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                          className="mr-2"
+                        >
+                          <Loader2 className="h-5 w-5" />
+                        </motion.div>
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        {editingIndex !== null ? "Update" : "Upload"}
+                        <Upload className="ml-2 h-5 w-5" />
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Document List */}
+        <motion.div variants={item}>
+          <Card className="bg-white/90 border-2 border-teal-200 shadow-lg hover:shadow-xl transition-all rounded-2xl h-full">
+            <CardHeader className="bg-gradient-to-r from-teal-500 to-green-500 text-white rounded-t-2xl">
+              <CardTitle className="text-xl font-bold flex items-center gap-3" style={{ lineHeight: "1.8" }}>
+                <FileImage className="h-6 w-6" />
+                Your Documents ({documents.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6">
+              <AnimatePresence mode="popLayout">
                 {documents.length > 0 ? (
-                  <div className="space-y-4">
+                  <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
                     {documents.map((doc, index) => (
-                      <div key={doc.id || index} className="p-4 bg-muted/50 rounded-lg">
-                        <div className="flex justify-between items-start mb-2">
-                          <h4 className="font-medium capitalize">{doc.documentType}</h4>
+                      <motion.div
+                        key={doc.id || index}
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.9 }}
+                        transition={{ duration: 0.3 }}
+                        className="p-4 bg-gradient-to-br from-teal-50 to-green-50 rounded-xl border-2 border-teal-200 hover:border-teal-300 hover:shadow-md transition-all"
+                      >
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <Badge className="bg-gradient-to-r from-teal-500 to-green-500 text-white mb-2">
+                              {doc.documentType === 'photo' ? 'Passport Photo' : 'Signature'}
+                            </Badge>
+                            {doc.status === 'uploaded' && (
+                              <Badge className="bg-green-500 text-white ml-2">
+                                <CheckCircle className="h-3 w-3 mr-1" />
+                                Uploaded
+                              </Badge>
+                            )}
+                          </div>
                           <div className="flex gap-2">
                             <Button
                               size="sm"
-                              variant="ghost"
+                              variant="outline"
                               onClick={() => handleEditDocument(index)}
+                              className="border-teal-300 hover:bg-teal-50 rounded-lg"
                             >
-                              Edit
+                              <Edit className="h-4 w-4" />
                             </Button>
                             <Button
                               size="sm"
-                              variant="ghost"
+                              variant="outline"
                               onClick={() => handleDeleteDocument(index)}
-                              className="text-destructive hover:text-destructive"
+                              className="border-red-300 text-red-600 hover:bg-red-50 rounded-lg"
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
                         </div>
+
                         <div className="flex items-center gap-4">
                           {doc.file_url && (
-                            <img src={doc.file_url} alt={doc.documentType} className="h-20 w-20 object-cover rounded shadow" />
+                            <div className="relative group">
+                              <img
+                                src={doc.file_url}
+                                alt={doc.documentType}
+                                className="h-24 w-24 object-cover rounded-lg border-2 border-teal-200 shadow"
+                              />
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                                <Eye className="h-6 w-6 text-white" />
+                              </div>
+                            </div>
                           )}
-                          <span className="text-sm text-muted-foreground">{doc.file_name}</span>
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold text-gray-800 mb-1" style={{ lineHeight: "1.6" }}>
+                              {doc.file_name}
+                            </p>
+                            <p className="text-xs text-gray-600" style={{ lineHeight: "1.6" }}>
+                              Status: {doc.status}
+                            </p>
+                          </div>
                         </div>
-                        <p className="text-sm text-muted-foreground mt-2">Status: {doc.status}</p>
-                      </div>
+                      </motion.div>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-8">
-                    <ImageIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground">No documents uploaded yet</p>
-                  </div>
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="text-center py-16"
+                  >
+                    <motion.div
+                      animate={{
+                        y: [0, -10, 0],
+                      }}
+                      transition={{
+                        duration: 2,
+                        repeat: Infinity,
+                      }}
+                    >
+                      <FileImage className="h-16 w-16 text-teal-300 mx-auto mb-4" />
+                    </motion.div>
+                    <p className="text-gray-600 text-lg font-semibold mb-2" style={{ lineHeight: "1.8" }}>
+                      No documents uploaded yet
+                    </p>
+                    <p className="text-gray-500 text-sm" style={{ lineHeight: "1.8" }}>
+                      Upload your photo and signature to continue
+                    </p>
+                  </motion.div>
                 )}
-              </CardContent>
-            </Card>
-          </div>
-
-        </div>
-      </div>
+              </AnimatePresence>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </motion.div>
     </div>
   );
 }

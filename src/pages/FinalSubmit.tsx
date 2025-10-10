@@ -56,21 +56,18 @@ export default function FinalSubmit() {
   if (loading || loadingData) {
     return (
       <div className="min-h-screen bg-background">
-        <Header />
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
             <p className="text-muted-foreground">Submitting your application...</p>
           </div>
         </div>
-        <Footer />
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
       <div className="py-8">
         <div className="container mx-auto px-4 max-w-2xl">
           <Card className="glass-card mb-8">
@@ -101,7 +98,6 @@ export default function FinalSubmit() {
           </Card>
         </div>
       </div>
-      <Footer />
     </div>
   );
 }

@@ -13,7 +13,7 @@ const resources = {
       "nav.language": "Language",
 
       // Home Page
-      "home.title": "Jharkhand Auxiliary Nurse Midwife Competitive Examination (JANMCE) - 2025",
+  "home.title": "JANMCE",
       "home.subtitle": "Government Of Jharkhand",
       "home.lastDate": "LAST DATE FOR SUBMISSION OF APPLICATION",
       "home.loginTitle": "User Login",
@@ -157,7 +157,7 @@ const resources = {
       "nav.language": "भाषा",
 
       // Home Page
-      "home.title": "झारखंड सहायक नर्स मिडवाइफ प्रतियोगी परीक्षा (JANMCE) - 2025",
+  "home.title": "JANMCE",
       "home.subtitle": "झारखंड सरकार",
       "home.lastDate": "आवेदन जमा करने की अंतिम तिथि",
       "home.loginTitle": "उपयोगकर्ता लॉगिन",

@@ -22,7 +22,11 @@ import {
   ArrowLeft,
   ArrowRight,
   Save,
-  FileText
+  FileText,
+  CheckCircle,
+  Loader2,
+  Sparkles,
+  Shield
 } from "lucide-react";
 import { Education } from "@/pages/Education";
 import { DocumentsUpload } from "@/pages/DocumentsUpload";
@@ -38,75 +42,97 @@ const REGISTRATION_STEPS = [
     title: "Personal Info",
     description: "Basic details",
     icon: User,
-    component: "PersonalInfo"
+    component: "PersonalInfo",
+    color: "from-cyan-500 to-teal-500"
   },
   {
     id: 2,
     title: "Other Details",
     description: "Additional info",
     icon: FileText,
-    component: "OtherDetails"
+    component: "OtherDetails",
+    color: "from-teal-500 to-blue-500"
   },
   {
     id: 3,
     title: "Education",
     description: "Qualifications",
     icon: GraduationCap,
-    component: "Education"
+    component: "Education",
+    color: "from-blue-500 to-cyan-500"
   },
   {
     id: 4,
     title: "Experience",
     description: "Work history",
     icon: Briefcase,
-    component: "Experience"
+    component: "Experience",
+    color: "from-cyan-500 to-teal-500"
   },
   {
     id: 5,
     title: "Documents",
     description: "Upload files",
     icon: Upload,
-    component: "Documents"
+    component: "Documents",
+    color: "from-teal-500 to-blue-500"
   },
   {
     id: 6,
     title: "Payment",
     description: "Fee payment",
     icon: CreditCard,
-    component: "Payment"
+    component: "Payment",
+    color: "from-blue-500 to-purple-500"
   },
   {
     id: 7,
     title: "Review",
     description: "Final check",
     icon: FileCheck,
-    component: "Review"
+    component: "Review",
+    color: "from-purple-500 to-cyan-500"
   }
 ];
 
 export function ExamRegistration() {
   const [currentStep, setCurrentStep] = useState(1);
-
-  // Removed stepper-next event listener. Navigation is handled by setCurrentStep and handleNext.
   const [posts, setPosts] = useState([]);
   const [postsLoading, setPostsLoading] = useState(true);
+  const [paymentCompleted, setPaymentCompleted] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
-  const { data, loading, saving, savePersonalInfo, saveEducationInfo, saveExperienceInfo, updateLocalData, ensureApplication } = useRegistrationData();
+  const { data, loading, saving, savePersonalInfo, saveEducationInfo, saveExperienceInfo, updateLocalData, ensureApplication, loadRegistrationData } = useRegistrationData();
 
-  // Debug: Log paymentDetails to verify its presence and value
   useEffect(() => {
     console.log('ExamRegistration paymentDetails:', data.paymentDetails);
+    // Check if payment is completed
+    if (data.paymentDetails?.payment_status === 'completed') {
+      setPaymentCompleted(true);
+    }
   }, [data.paymentDetails]);
 
-  // Patch: Add otherDetails to RegistrationData if missing
+  // Listen for payment completion event
+  useEffect(() => {
+    const handlePaymentCompleted = async () => {
+      console.log('Payment completed event received, reloading data...');
+      await loadRegistrationData();
+      setPaymentCompleted(true);
+    };
+
+    window.addEventListener('payment-completed', handlePaymentCompleted);
+
+    return () => {
+      window.removeEventListener('payment-completed', handlePaymentCompleted);
+    };
+  }, [loadRegistrationData]);
+
   if (!('otherDetails' in data)) {
     (data as any).otherDetails = {};
   }
   const { debounce, batchOperations, createCache } = usePerformanceOptimization();
 
-  // Create cache for posts to reduce database calls
   const postsCache = createCache();
 
   useEffect(() => {
@@ -146,32 +172,31 @@ export function ExamRegistration() {
 
     fetchPosts();
   }, []);
-  
 
   useEffect(() => {
-    // Determine the current step based on completed steps and payment status
     const maxCompletedStep = Math.max(0, ...data.completedSteps);
-    const paymentCompleted = data.paymentDetails?.payment_status === 'completed';
-    // If all steps up to payment are done and payment is completed, go to FinalPreview
-    if (maxCompletedStep >= 6 && paymentCompleted) {
+    const isPaymentCompleted = data.paymentDetails?.payment_status === 'completed' || paymentCompleted;
+    
+    console.log('Calculating current step:', { maxCompletedStep, isPaymentCompleted, paymentDetails: data.paymentDetails });
+    
+    if (maxCompletedStep >= 6 && isPaymentCompleted) {
       setCurrentStep(7);
     } else {
       const nextStep = maxCompletedStep < 6 ? maxCompletedStep + 1 : 6;
       setCurrentStep(nextStep);
     }
-  }, [data.completedSteps, data.paymentDetails]);
+  }, [data.completedSteps, data.paymentDetails, paymentCompleted]);
 
   const steps = REGISTRATION_STEPS.map(step => ({
     ...step,
     completed:
       step.id === 6
-        ? data.paymentDetails?.payment_status === 'completed'
+        ? data.paymentDetails?.payment_status === 'completed' || paymentCompleted
         : data.completedSteps.includes(step.id),
     current: step.id === currentStep
   }));
 
   const handleStepClick = (stepId: number) => {
-    // Allow navigation to completed steps or the next immediate step
     const maxAllowedStep = Math.max(1, ...data.completedSteps) + 1;
     if (stepId <= maxAllowedStep) {
       setCurrentStep(stepId);
@@ -187,8 +212,7 @@ export function ExamRegistration() {
   const handleNext = async () => {
     if (currentStep < 6) {
       if (currentStep === 4) {
-        // For Experience step, always advance to Documents
-        await handleSaveCurrentStep(); // Optionally still save
+        await handleSaveCurrentStep();
         setCurrentStep(prev => prev + 1);
       } else {
         const saveSuccess = await handleSaveCurrentStep();
@@ -197,8 +221,18 @@ export function ExamRegistration() {
         }
       }
     } else if (currentStep === 6) {
-      // Payment step: go to FinalPreview (step 7)
-      setCurrentStep(7);
+      // Check payment status before allowing next
+      const isPaymentDone = data.paymentDetails?.payment_status === 'completed' || paymentCompleted;
+      
+      if (isPaymentDone) {
+        setCurrentStep(7);
+      } else {
+        toast({
+          title: "Payment Required",
+          description: "Please complete the payment to proceed",
+          variant: "destructive"
+        });
+      }
     }
   };
 
@@ -212,26 +246,31 @@ export function ExamRegistration() {
     try {
       switch (currentStep) {
         case 1: {
-          // Saving is handled by PersonalInfo form's onSave callback. Do nothing here.
           return true;
         }
         case 2: {
-          // Save Other Details to new table
           const otherDetails = (data as any).otherDetails || {};
-          // @ts-ignore: bypass type error for upsert
-          const { error } = await (supabase as any)
+          const { error } = await supabase
             .from('other_details')
             .upsert({
               user_id: user?.id,
-              ...otherDetails
+              ...otherDetails,
+              updated_at: new Date().toISOString()
+            }, {
+              onConflict: 'user_id'
             });
           if (error) throw error;
           return true;
         }
-        case 3:
-          return await saveEducationInfo(data.educationInfo);
-        case 4:
-          return await saveExperienceInfo(data.experienceInfo);
+        case 3: {
+          return true;
+        }
+        case 4: {
+          return true;
+        }
+        case 5: {
+          return true;
+        }
         default:
           return true;
       }
@@ -257,13 +296,11 @@ export function ExamRegistration() {
     switch (currentStep) {
       case 1:
         return <PersonalInfo onNext={handleNext} onSave={async (formData) => {
-          // Update registration context with latest form data
           updateLocalData('personalInfo', formData);
-          // Save to DB
           return await savePersonalInfo(formData);
         }} />;
       case 2:
-        return <OtherDetails />;
+        return <OtherDetails onNext={handleNext} />;
       case 3:
         return <Education onNext={handleNext} />;
       case 4:
@@ -282,174 +319,282 @@ export function ExamRegistration() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="glass-card p-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-muted-foreground">Loading registration data...</p>
-        </div>
+      <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-teal-50 to-blue-50 flex items-center justify-center relative overflow-hidden">
+        <motion.div
+          className="absolute top-0 right-0 w-96 h-96 bg-cyan-300/20 rounded-full blur-3xl"
+          animate={{
+            scale: [1, 1.2, 1],
+            rotate: [0, 180, 360],
+          }}
+          transition={{
+            duration: 10,
+            repeat: Infinity,
+          }}
+        />
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center z-10"
+        >
+          <motion.div
+            className="w-20 h-20 border-4 border-cyan-500 border-t-transparent rounded-full mx-auto mb-6"
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          />
+          <p className="text-gray-700 text-lg font-semibold" style={{ lineHeight: "1.8" }}>
+            Loading registration data...
+          </p>
+        </motion.div>
       </div>
     );
   }
 
+  const isPaymentCompleted = data.paymentDetails?.payment_status === 'completed' || paymentCompleted;
+
   return (
     <ProtectedRoute requirePhoneVerification={true}>
       <ApplicationStatusGuard allowedStatuses={['draft', 'payment_pending', 'document_pending', 'payment_completed']}>
-        <div className="min-h-screen bg-background">
-          <Header />
-          
-          <main className="container mx-auto px-4 py-8">
-          {/* Header Section */}
-          <div className="text-center mb-8">
-            <motion.div
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="inline-flex items-center gap-2 bg-gradient-primary text-white px-4 py-2 rounded-full text-sm font-medium mb-4"
-            >
-              <User className="w-4 h-4" />
-              Welcome, {user?.email}
-            </motion.div>
-            
-            <motion.h1
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="text-3xl md:text-4xl font-bold text-foreground mb-2"
-            >
-              Exam Registration Portal
-            </motion.h1>
-            
-            <motion.p
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="text-muted-foreground text-lg"
-            >
-              Complete your registration step by step. Your progress is automatically saved.
-            </motion.p>
-          </div>
-
-          {/* Progress Stepper */}
+        <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-teal-50 to-blue-50 relative overflow-hidden">
+          {/* Animated background elements */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-          >
-            <RegistrationStepper
-              steps={steps}
-              currentStep={currentStep}
-              onStepClick={handleStepClick}
-            />
-          </motion.div>
+            className="absolute top-0 right-0 w-96 h-96 bg-cyan-300/20 rounded-full blur-3xl"
+            animate={{
+              x: [0, -50, 0],
+              y: [0, 50, 0],
+            }}
+            transition={{
+              duration: 20,
+              repeat: Infinity,
+            }}
+          />
+          <motion.div
+            className="absolute bottom-0 left-0 w-96 h-96 bg-teal-300/20 rounded-full blur-3xl"
+            animate={{
+              x: [0, 50, 0],
+              y: [0, -50, 0],
+            }}
+            transition={{
+              duration: 15,
+              repeat: Infinity,
+            }}
+          />
 
-          {/* Main Content */}
-          <Card className="glass-card mt-8">
-            <div className="p-6">
-              {/* Step Header */}
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  {React.createElement(steps[currentStep - 1]?.icon || User, {
-                    className: "w-6 h-6 text-primary"
-                  })}
-                  <div>
-                    <h2 className="text-xl font-semibold">
-                      Step {currentStep}: {steps[currentStep - 1]?.title}
-                    </h2>
-                    <p className="text-muted-foreground text-sm">
-                      {steps[currentStep - 1]?.description}
-                    </p>
-                  </div>
-                </div>
-                
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSaveCurrentStep}
-                  disabled={saving}
-                  className="flex items-center gap-2"
-                >
-                  <Save className="w-4 h-4" />
-                  {saving ? "Saving..." : "Save Progress"}
-                </Button>
-              </div>
-
-              {/* Step Content */}
-              <AnimatePresence mode="wait">
+          <main className="container mx-auto px-4 py-12 relative z-10">
+            {/* Header Section */}
+            <div className="text-center mb-12">
+              <motion.div
+                initial={{ opacity: 0, y: -20, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.6 }}
+                className="inline-flex items-center gap-3 bg-gradient-to-r from-cyan-500 to-teal-500 text-white px-6 py-3 rounded-full text-base font-semibold mb-6 shadow-xl"
+                style={{ lineHeight: "1.8" }}
+              >
                 <motion.div
-                  key={currentStep}
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.3 }}
+                  animate={{
+                    rotate: [0, 360],
+                  }}
+                  transition={{
+                    duration: 3,
+                    repeat: Infinity,
+                    ease: "linear",
+                  }}
                 >
-                  {renderStepContent()}
+                  <Shield className="w-5 h-5" />
                 </motion.div>
-              </AnimatePresence>
+                Welcome, {user?.email}
+              </motion.div>
+              
+              <motion.h1
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2, duration: 0.6 }}
+                className="text-4xl md:text-5xl font-extrabold bg-gradient-to-r from-cyan-600 via-teal-600 to-blue-600 bg-clip-text text-transparent mb-4"
+                style={{ lineHeight: "1.6" }}
+              >
+                Exam Registration Portal
+              </motion.h1>
+              
+              <motion.p
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3, duration: 0.6 }}
+                className="text-gray-700 text-lg max-w-2xl mx-auto"
+                style={{ lineHeight: "1.8" }}
+              >
+                Complete your registration step by step. Your progress is automatically saved.
+              </motion.p>
+            </div>
 
-              {/* Navigation Buttons */}
-              {currentStep !== 1 && (
-                <div className="flex justify-between mt-8">
-                  <Button
-                    variant="outline"
-                    onClick={handlePrevious}
-                    disabled={saving}
-                    className="flex items-center gap-2"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    Previous
-                  </Button>
+            {/* Progress Stepper */}
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4, duration: 0.8 }}
+              className="mb-12"
+            >
+              <RegistrationStepper
+                steps={steps}
+                currentStep={currentStep}
+                onStepClick={handleStepClick}
+              />
+            </motion.div>
 
-                  {currentStep === 6 ? (
-                    <Button
-                      onClick={handleNext}
-                      disabled={!(data.paymentDetails?.payment_status === 'completed')}
-                      className="flex items-center gap-2"
+            {/* Main Content Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5, duration: 0.8 }}
+            >
+              <Card className="bg-white/90 backdrop-blur-xl border-2 border-cyan-200 shadow-2xl rounded-3xl">
+                <div className="p-8">
+                  {/* Step Header */}
+                  <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+                    <motion.div 
+                      className="flex items-center gap-4"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.6 }}
                     >
-                      Next
-                      <ArrowRight className="w-4 h-4" />
-                    </Button>
-                  ) : currentStep === 7 ? (
-                    <Button
-                      onClick={async () => {
-                        // Submit application logic (was in FinalPreview)
-                        try {
-                          const nextAppNumber = `REG${new Date().getFullYear()}${String(Date.now()).slice(-7)}`;
-                          const { error } = await supabase
-                            .from('applications')
-                            .update({
-                              status: 'submitted',
-                              submitted_at: new Date().toISOString(),
-                              application_number: nextAppNumber
-                            })
-                            .eq('id', (data.applicationInfo as any)?.id)
-                            .select()
-                            .single();
-                          if (error) throw error;
-                          toast({ title: 'Success', description: 'Application submitted successfully!' });
-                          navigate('/Dashboard');
-                        } catch (err) {
-                          toast({ title: 'Error', description: 'Failed to submit application', variant: 'destructive' });
-                        }
-                      }}
-                      disabled={saving}
-                      className="flex items-center gap-2"
+                      <motion.div
+                        className={`w-16 h-16 bg-gradient-to-br ${steps[currentStep - 1]?.color} rounded-2xl flex items-center justify-center shadow-xl`}
+                        animate={{
+                          rotate: [0, 360],
+                        }}
+                        transition={{
+                          duration: 20,
+                          repeat: Infinity,
+                          ease: "linear",
+                        }}
+                      >
+                        {React.createElement(steps[currentStep - 1]?.icon || User, {
+                          className: "w-8 h-8 text-white"
+                        })}
+                      </motion.div>
+                      <div>
+                        <h2 className="text-2xl font-bold text-gray-800" style={{ lineHeight: "1.6" }}>
+                          Step {currentStep}: {steps[currentStep - 1]?.title}
+                        </h2>
+                        <p className="text-gray-600 text-base" style={{ lineHeight: "1.8" }}>
+                          {steps[currentStep - 1]?.description}
+                        </p>
+                      </div>
+                    </motion.div>
+                    
+                    <motion.div
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.7 }}
                     >
-                      Submit Application
-                      <ArrowRight className="w-4 h-4" />
-                    </Button>
-                  ) : (
-                    <Button
-                      onClick={handleNext}
-                      disabled={saving}
-                      className="flex items-center gap-2"
+                      <Button
+                        variant="outline"
+                        size="lg"
+                        onClick={handleSaveCurrentStep}
+                        disabled={saving}
+                        className="flex items-center gap-2 border-2 border-teal-300 hover:bg-teal-50 rounded-xl px-6 py-6 font-semibold"
+                      >
+                        {saving ? (
+                          <motion.div
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                          >
+                            <Loader2 className="w-5 h-5" />
+                          </motion.div>
+                        ) : (
+                          <Save className="w-5 h-5" />
+                        )}
+                        {saving ? "Saving..." : "Save Progress"}
+                      </Button>
+                    </motion.div>
+                  </div>
+
+                  {/* Step Content */}
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={currentStep}
+                      initial={{ opacity: 0, x: 50 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -50 }}
+                      transition={{ duration: 0.4 }}
+                      className="min-h-[400px]"
                     >
-                      Next
-                      <ArrowRight className="w-4 h-4" />
-                    </Button>
+                      {renderStepContent()}
+                    </motion.div>
+                  </AnimatePresence>
+
+                  {/* Navigation Buttons */}
+                  {currentStep !== 1 && (
+                    <motion.div 
+                      className="flex justify-between mt-10 pt-8 border-t-2 border-cyan-100"
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.3 }}
+                    >
+                      <Button
+                        variant="outline"
+                        size="lg"
+                        onClick={handlePrevious}
+                        disabled={saving}
+                        className="flex items-center gap-2 border-2 border-gray-300 hover:bg-gray-50 rounded-xl px-8 py-6 font-semibold"
+                      >
+                        <ArrowLeft className="w-5 h-5" />
+                        Previous
+                      </Button>
+
+                      {currentStep === 6 ? (
+                        <Button
+                          size="lg"
+                          onClick={handleNext}
+                          disabled={!isPaymentCompleted}
+                          className="flex items-center gap-2 bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 text-white rounded-xl px-8 py-6 font-semibold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Next
+                          <ArrowRight className="w-5 h-5" />
+                        </Button>
+                      ) : currentStep === 7 ? (
+                        <Button
+                          size="lg"
+                          onClick={async () => {
+                            try {
+                              const nextAppNumber = `REG${new Date().getFullYear()}${String(Date.now()).slice(-7)}`;
+                              const { error } = await supabase
+                                .from('applications')
+                                .update({
+                                  status: 'submitted',
+                                  submitted_at: new Date().toISOString(),
+                                  application_number: nextAppNumber
+                                })
+                                .eq('id', (data.applicationInfo as any)?.id)
+                                .select()
+                                .single();
+                              if (error) throw error;
+                              toast({ title: 'Success', description: 'Application submitted successfully!' });
+                              navigate('/dashboard');
+                            } catch (err) {
+                              toast({ title: 'Error', description: 'Failed to submit application', variant: 'destructive' });
+                            }
+                          }}
+                          disabled={saving}
+                          className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-xl px-8 py-6 font-semibold shadow-lg"
+                        >
+                          <CheckCircle className="w-5 h-5" />
+                          Submit Application
+                        </Button>
+                      ) : (
+                        <Button
+                          size="lg"
+                          onClick={handleNext}
+                          disabled={saving}
+                          className="flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white rounded-xl px-8 py-6 font-semibold shadow-lg"
+                        >
+                          Next
+                          <ArrowRight className="w-5 h-5" />
+                        </Button>
+                      )}
+                    </motion.div>
                   )}
                 </div>
-              )}
-            </div>
-          </Card>
+              </Card>
+            </motion.div>
           </main>
         </div>
       </ApplicationStatusGuard>

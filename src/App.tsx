@@ -16,6 +16,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { PersonalInfo } from "./pages/PersonalInfo";
 import { Education } from "./pages/Education";
 import { Experience } from "./pages/Experience";
+
 import { Auth } from "./pages/Auth";
 import { AdminDashboard } from "./pages/AdminDashboard";
 import { DocumentsUpload } from "./pages/DocumentsUpload";
@@ -26,6 +27,8 @@ import { ExamRegistration } from "./pages/ExamRegistration";
 import { EnhancedAuth } from "./pages/EnhancedAuth";
 import { PhoneVerification } from "./pages/PhoneVerification";
 import { AuthProvider } from "@/hooks/useAuth";
+import { Header } from "@/components/layout/Header";
+import { Footer } from "@/components/layout/Footer";
 
 const queryClient = new QueryClient();
 
@@ -62,34 +65,38 @@ const App = () => {
   return (
     <AuthProvider>
       <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Suspense fallback={<LoadingSpinner />}>
-            <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/important-dates" element={<ImportantDates />} />
-              <Route path="/how-to-apply" element={<HowToApply />} />
-              <Route path="/verify-phone" element={<PhoneVerification />} />
-              <Route path="/register" element={<ExamRegistration />} />
-              <Route path="/auth" element={<EnhancedAuth />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/admin" element={<AdminDashboard />} />
-              <Route path="/personal-info" element={<PersonalInfo />} />
-              <Route path="/education" element={<Education />} />
-              <Route path="/experience" element={<Experience />} />
-              <Route path="/documents" element={<DocumentsUpload />} />
-              <Route path="/payment" element={<Payment />} />
-              <Route path="/final-preview" element={<FinalPreview />} />
-              <Route path="/final-submit" element={<FinalSubmit />} />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Suspense>
-        </BrowserRouter>
-      </TooltipProvider>
-    </QueryClientProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Header />
+            <main className="flex-1 min-h-[80vh]">
+              <Suspense fallback={<LoadingSpinner />}>
+                <Routes>
+                  <Route path="/" element={<HomePage />} />
+                  <Route path="/important-dates" element={<ImportantDates />} />
+                  <Route path="/how-to-apply" element={<HowToApply />} />
+                  <Route path="/verify-phone" element={<PhoneVerification />} />
+                  <Route path="/register" element={<ExamRegistration />} />
+                  <Route path="/auth" element={<EnhancedAuth />} />
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/admin" element={<AdminDashboard />} />
+                  <Route path="/personal-info" element={<PersonalInfo />} />
+                  <Route path="/education" element={<Education />} />
+                  <Route path="/experience" element={<Experience />} />
+                  <Route path="/documents" element={<DocumentsUpload />} />
+                  <Route path="/payment" element={<Payment />} />
+                  <Route path="/final-preview" element={<FinalPreview />} />
+                  <Route path="/final-submit" element={<FinalSubmit />} />
+                  {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Suspense>
+            </main>
+            <Footer />
+          </BrowserRouter>
+        </TooltipProvider>
+      </QueryClientProvider>
     </AuthProvider>
   );
 };
